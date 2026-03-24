@@ -1,0 +1,67 @@
+{
+  "key_id": "regions_lifegreen_business_checking_v1",
+  "bank": "Regions Bank",
+  "product": "LifeGreen Business Checking",
+  "sheet_name_template": "Regions {last4} - {year}",
+  "detect_by": ["Regions Bank", "LIFEGREEN BUSINESS CHECKING", "regions.com"],
+
+  "header": {
+    "period_regex": "(\\w+ \\d+, \\d{4}) through (\\w+ \\d+, \\d{4})",
+    "period_format": "Month DD, YYYY",
+    "account_regex": "ACCOUNT #\\s*(\\d+)",
+    "beginning_balance_regex": "Beginning Balance[\\s\\$]+([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "Ending Balance[\\s\\$]+([\\d,]+\\.\\d{2})"
+  },
+
+  "date_format": "MM/DD",
+  "year_from": "period",
+
+  "sections": [
+    {
+      "name": "DEPOSITS & CREDITS",
+      "start_marker": "DEPOSITS & CREDITS",
+      "end_markers": ["WITHDRAWALS", "FEES", "DAILY BALANCE SUMMARY", "Page \\d of"],
+      "type": "Deposit",
+      "reference": "",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["Wire Transfer (.+)", "Wire - $1"]
+      ]
+    },
+    {
+      "name": "WITHDRAWALS",
+      "start_marker": "^WITHDRAWALS$",
+      "end_markers": ["FEES", "DAILY BALANCE SUMMARY", "Page \\d of"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["Wire Transfer (.+)", "Wire to $1"],
+        ["Bank Debit", "Bank Debit"]
+      ]
+    },
+    {
+      "name": "FEES",
+      "start_marker": "^FEES$",
+      "end_markers": ["DAILY BALANCE SUMMARY", "Page \\d of"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["Analysis Charge.*", "Analysis Charge"],
+        ["Wire Transfer Incoming Fee", "Wire Incoming Fee"]
+      ]
+    }
+  ],
+
+  "validation": {
+    "daily_balance_marker": "DAILY BALANCE SUMMARY",
+    "daily_balance_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})"
+  }
+}

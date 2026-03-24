@@ -1,0 +1,61 @@
+{
+  "_info": "Registro central de bank keys. Agregar entradas aquí para que la app detecte nuevas keys. El código de index.html NO necesita modificarse.",
+  "keys": [
+    {
+      "key_id": "pnc_business_checking_plus_v1",
+      "file": "pnc_business_checking_plus.json",
+      "bank": "PNC Bank",
+      "product": "Business Checking Plus",
+      "status": "active"
+    },
+    {
+      "key_id": "chase_business_complete_checking_v1",
+      "file": "chase_business_complete_checking.json",
+      "bank": "Chase",
+      "product": "Business Complete Checking",
+      "status": "active"
+    },
+    {
+      "key_id": "regions_lifegreen_business_checking_v1",
+      "file": "regions_lifegreen_business_checking.json",
+      "bank": "Regions Bank",
+      "product": "LifeGreen Business Checking",
+      "status": "active"
+    },
+    {
+      "key_id": "wells_fargo_optimize_business_checking_v1",
+      "file": "wells_fargo_optimize_business_checking.json",
+      "bank": "Wells Fargo",
+      "product": "Optimize Business Checking",
+      "status": "active"
+    },
+    {
+      "key_id": "bofa_business_advantage_fundamentals_v1",
+      "file": "bofa_business_advantage_fundamentals.json",
+      "bank": "Bank of America",
+      "product": "Business Advantage Fundamentals Banking",
+      "status": "active"
+    },
+    {
+      "key_id": "mercury_checking_v1",
+      "file": "mercury_checking.json",
+      "bank": "Mercury",
+      "product": "Mercury Checking",
+      "status": "active"
+    },
+    {
+      "key_id": "truist_business_value_200_checking_v1",
+      "file": "truist_business_value_200_checking.json",
+      "bank": "Truist",
+      "product": "Business Value 200 Checking",
+      "status": "active"
+    },
+    {
+      "key_id": "pnb_business_regular_checking_v1",
+      "file": "pnb_business_regular_checking.json",
+      "bank": "Pacific National Bank",
+      "product": "Business Regular Checking",
+      "status": "active"
+    }
+  ]
+}

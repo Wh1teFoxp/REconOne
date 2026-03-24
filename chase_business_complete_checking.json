@@ -1,0 +1,76 @@
+{
+  "key_id": "chase_business_complete_checking_v1",
+  "bank": "Chase",
+  "product": "Business Complete Checking",
+  "sheet_name_template": "Chase {last4} - {year}",
+  "detect_by": ["Chase Business Complete Checking", "JPMorgan Chase", "CHECKING SUMMARY"],
+
+  "header": {
+    "period_regex": "(\\w+ \\d+, \\d{4}) through (\\w+ \\d+, \\d{4})",
+    "period_format": "Month DD, YYYY",
+    "account_regex": "Account Number:[\\s]*(\\d+)",
+    "beginning_balance_regex": "Beginning Balance[\\s\\$]+([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "Ending Balance[\\s\\d]+\\$([\\d,]+\\.\\d{2})"
+  },
+
+  "date_format": "MM/DD",
+  "year_from": "period",
+
+  "sections": [
+    {
+      "name": "DEPOSITS AND ADDITIONS",
+      "start_marker": "DEPOSITS AND ADDITIONS",
+      "end_markers": ["ELECTRONIC WITHDRAWALS", "FEES", "DAILY ENDING BALANCE", "Page \\d of"],
+      "type": "Deposit",
+      "reference": "",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+\\$?([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["Orig CO Name:Payoneer[^\\n]*Ref\\*TN\\*[\\w]+\\*([\\w ]+)\\\\.*", "Payoneer - $1"],
+        ["Orig CO Name:([\\w ]+)\\s+Orig ID.*", "$1"],
+        ["Real Time (?:Transfer|Payment) (?:Credit )?Recd From[^F]*From: Bnf-([\\w ]+) Ref:.*", "RTP - $1"],
+        ["Fedwire Credit Via:[^B]*B/O: ([\\w ]+)[^V]*Vendor:.*", "Wire - $1"],
+        ["Remote Online Deposit \\d+", "Remote Deposit"],
+        ["Online Transfer From Chk \\.\\.\\.([\\d]+) Transaction.*", "Transfer from CHK $1"],
+        ["Zelle Payment From ([\\w ]+) \\w+$", "Zelle from $1"],
+        ["Deposit \\d+", "Deposit"]
+      ]
+    },
+    {
+      "name": "ELECTRONIC WITHDRAWALS",
+      "start_marker": "ELECTRONIC WITHDRAWALS",
+      "end_markers": ["FEES", "DAILY ENDING BALANCE", "Page \\d of"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+\\$?([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["\\d{2}/\\d{2}\\s+Online Domestic Wire Transfer Via:[^A]*A/C: ([\\w ]+?) [A-Z]{2}\\s+\\d{5}.*", "Wire to $1"],
+        ["Zelle Payment To ([\\w ]+) \\w+$", "Zelle to $1"],
+        ["Online Transfer To Chk \\.\\.\\.([\\d]+) Transaction.*", "Transfer to CHK $1"]
+      ]
+    },
+    {
+      "name": "FEES",
+      "start_marker": "^FEES$",
+      "end_markers": ["DAILY ENDING BALANCE", "Page \\d of"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+\\$?([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["Online Domestic Wire Fee", "Wire Fee"],
+        ["Domestic Incoming Wire Fee", "Incoming Wire Fee"],
+        ["Monthly Service Fee", "Monthly Service Fee"]
+      ]
+    }
+  ],
+
+  "validation": {
+    "daily_balance_marker": "DAILY ENDING BALANCE",
+    "daily_balance_regex": "(\\d{2}/\\d{2})\\s+\\$?([\\d,]+\\.\\d{2})"
+  }
+}

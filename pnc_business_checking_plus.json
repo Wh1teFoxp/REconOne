@@ -1,0 +1,94 @@
+{
+  "key_id": "pnc_business_checking_plus_v1",
+  "bank": "PNC Bank",
+  "product": "Business Checking Plus",
+  "sheet_name_template": "PNC {last4} - {year}",
+  "detect_by": ["Business Checking Plus", "PNC Bank", "pnc.com/mybusiness"],
+
+  "header": {
+    "period_regex": "For the Period (\\d{2}/\\d{2}/\\d{4}) to (\\d{2}/\\d{2}/\\d{4})",
+    "account_regex": "Primary Account Number:[\\s]*([\\d-]+)",
+    "beginning_balance_regex": "(?:Beginning|beginning)\\s+balance[\\s\\S]{0,80}?([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "Ending\\s+balance[\\s\\S]{0,200}?([\\d,]+\\.\\d{2})(?=\\s)"
+  },
+
+  "date_format": "MM/DD",
+  "year_from": "period",
+
+  "sections": [
+    {
+      "name": "ACH Additions",
+      "start_marker": "ACH Additions",
+      "end_markers": ["Checks and Substitute Checks", "Debit Card Purchases", "ATM/Misc", "Service Charges", "Daily Balance", "Page \\d"],
+      "type": "Deposit",
+      "reference": "",
+      "row_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+(.+?)(?:\\s{2,}|$)",
+      "columns": ["date","amount","description"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["ACH Credit[^\\n]*Uspa Polo Develo[^\\n]*", "USPA Polo Development"],
+        ["Corporate ACH Cash Disb[^\\n]*Uspa Properties[^\\n]*", "USPA Properties Wellington Polo"],
+        ["ACH Credit[\\s\\S]{0,60}", "ACH Credit"]
+      ]
+    },
+    {
+      "name": "Checks and Substitute Checks",
+      "start_marker": "Checks and Substitute Checks",
+      "end_markers": ["Debit Card Purchases", "ATM/Misc", "Service Charges", "Daily Balance", "Page \\d"],
+      "type": "Payment",
+      "reference": "check_number",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(\\d+)\\s*\\*?\\s+([\\d,]+\\.\\d{2})",
+      "columns": ["date","check_number","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        [".*", "Check"]
+      ]
+    },
+    {
+      "name": "Debit Card Purchases",
+      "start_marker": "Debit Card Purchases",
+      "end_markers": ["ATM/Misc", "Service Charges", "Daily Balance", "Page \\d"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+(?:\\d{4}\\s+)?Debit Card Purchase\\s+(.+?)(?:\\s{2,}[\\dA-Z]{10,}|$)",
+      "columns": ["date","amount","description"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["\\d{4}\\s+Debit Card Purchase\\s+", ""],
+        ["Debit Card Purchase\\s+", ""]
+      ]
+    },
+    {
+      "name": "ATM/Misc. Debit Card Transactions",
+      "start_marker": "ATM/Misc",
+      "end_markers": ["Service Charges", "Daily Balance", "Page \\d"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+(?:\\d{4}\\s+)?(?:Recurring Debit Card\\s+)?(.+?)(?:\\s{2,}[\\dA-Z]{10,}|$)",
+      "columns": ["date","amount","description"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["\\d{4}\\s+Recurring Debit Card\\s+", ""],
+        ["Recurring Debit Card\\s+", ""]
+      ]
+    },
+    {
+      "name": "Service Charges and Fees",
+      "start_marker": "Service Charges and Fees",
+      "end_markers": ["Daily Balance", "Detail of Services", "Page \\d"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+(.+?)(?:\\s{2,}|$)",
+      "columns": ["date","amount","description"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["Service Charge Period Ending.*", "Service Charge"]
+      ]
+    }
+  ],
+
+  "validation": {
+    "daily_balance_marker": "Daily Balance",
+    "daily_balance_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})"
+  }
+}

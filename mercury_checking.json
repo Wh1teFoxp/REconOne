@@ -1,0 +1,60 @@
+{
+  "key_id": "mercury_checking_v1",
+  "bank": "Mercury",
+  "product": "Mercury Checking",
+  "sheet_name_template": "Mercury {last4} - {year}",
+  "detect_by": ["Mercury", "mercury.com", "Choice Financial Group", "All Transactions"],
+
+  "header": {
+    "period_regex": "(\\w+) (\\d{4}) statement",
+    "period_format": "Month YYYY",
+    "account_regex": "Account Number\\s+(\\d+)",
+    "beginning_balance_regex": "Beginning Balance[\\s\\$]+([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "Statement balance[\\s\\$]+([\\d,]+\\.\\d{2})"
+  },
+
+  "date_format": "Mon DD",
+  "year_from": "period",
+
+  "sections": [
+    {
+      "name": "All Transactions",
+      "start_marker": "All Transactions",
+      "end_markers": ["Total \\$", "Banking services provided"],
+      "type": "mixed",
+      "reference": "auto",
+      "row_regex": "(\\w{3} \\d{1,2})\\s+(.+?)\\s+(Wire Payment|ACH In|Wire)?\\s+([+\u2013-][\\$]?[\\d,]+\\.\\d{2})\\s+([\\d,]+\\.\\d{2})",
+      "columns": ["date","description","tx_type","amount","eod_balance"],
+      "amount_sign": "from_prefix",
+      "positive_prefix": "+",
+      "negative_prefix": "\u2013",
+      "type_rules": {
+        "ACH In": "Deposit",
+        "Wire": "Deposit",
+        "Wire Payment": "Payment",
+        "": "Payment"
+      },
+      "reference_rules": {
+        "ACH In": "",
+        "Wire": "",
+        "Wire Payment": "Debit",
+        "": "Debit"
+      },
+      "normalize": [
+        ["(.+?)\\s+\u2022\u2022\\d{4}$", "$1"],
+        ["PAYONEER \\d+", "Payoneer"],
+        ["ROCKETLAUNCH DIG", "Rocketlaunch Digital"],
+        ["WISE US INC", "Wise"],
+        ["EQUO TECH INC", "Equo Tech Inc"],
+        ["BONZZU INC", "Bonzzu Inc"],
+        ["IMPROVING SOUTH AMERICA.*", "Improving South America LLC"]
+      ]
+    }
+  ],
+
+  "validation": {
+    "use_running_balance": true,
+    "running_balance_column": "eod_balance",
+    "note": "Mercury provee saldo fin de día por transacción. Para días con múltiples txs, usar el saldo de la última."
+  }
+}

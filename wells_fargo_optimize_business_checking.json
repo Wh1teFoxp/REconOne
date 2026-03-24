@@ -1,0 +1,76 @@
+{
+  "key_id": "wells_fargo_optimize_business_checking_v1",
+  "bank": "Wells Fargo",
+  "product": "Optimize Business Checking",
+  "sheet_name_template": "WF {last4} - {year}",
+  "detect_by": ["Wells Fargo", "Optimize Business Checking", "wellsfargo.com"],
+
+  "header": {
+    "period_regex": "(\\w+ \\d+, \\d{4}) - (\\w+ \\d+, \\d{4})",
+    "period_format": "Month DD, YYYY",
+    "account_regex": "Account number:\\s*(\\d+)",
+    "beginning_balance_regex": "Beginning balance[\\s\\$]+([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "Ending balance[\\s\\$]+([\\d,]+\\.\\d{2})"
+  },
+
+  "date_format": "MM/DD",
+  "year_from": "period",
+
+  "sections": [
+    {
+      "name": "Electronic deposits/bank credits",
+      "start_marker": "Electronic deposits/bank credits",
+      "end_markers": ["Total electronic deposits", "Total credits", "Debits", "Electronic debits"],
+      "type": "Deposit",
+      "reference": "",
+      "row_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+(.+?)(?=\\d{2}/\\d{2}|Total|$)",
+      "columns": ["date","amount","description"],
+      "amount_sign": "positive",
+      "multiline_description": true,
+      "normalize": [
+        ["WT (?:Fed#\\w+|[\\w]+) ([\\w ]+) /Org=([\\w ./]+) Srf#.*", "Wire - $2"],
+        ["Zelle From ([\\w ]+) on \\d+.*", "Zelle from $1"],
+        ["Transfer From [\\w ]+ Ref #\\w+ Business Checking (.+)", "Transfer - $1"],
+        ["([\\w]+) Digital Sender \\d+ \\w+ \\w+", "ACH - $1"]
+      ]
+    },
+    {
+      "name": "Electronic debits/bank debits",
+      "start_marker": "Electronic debits/bank debits",
+      "end_markers": ["Total electronic debits", "Checks paid", "Daily ledger"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+(.+?)(?=\\d{2}/\\d{2}|Total|$)",
+      "columns": ["date","amount","description"],
+      "amount_sign": "positive",
+      "multiline_description": true,
+      "normalize": [
+        ["ACH Prep Origintn - ([\\w ]+) - File.*", "ACH - $1"],
+        ["Online Transfer to ([\\w ]+) Ref.*", "Transfer to $1"],
+        ["Citi Card Online Payment.*", "Citi Card Payment"],
+        ["Purchase Intl authorized.*", "Debit Purchase Intl"],
+        ["International Purchase Transaction Fee", "Intl Purchase Fee"],
+        ["Online Sched Payment[^t]*to ([\\w ]+) .*", "Payment to $1"],
+        ["Transfer to ([\\w ]+) Ref.*Business Checking (.+)", "Transfer to $1"],
+        ["WT (?:Fed#\\w+|[\\w]+) [^/]+/(?:Bnf|Ftr/Bnf)=([\\w ]+) Srf#.*", "Wire to $1"]
+      ]
+    },
+    {
+      "name": "Checks paid",
+      "start_marker": "Checks paid",
+      "end_markers": ["Total checks paid", "Daily ledger", "$\\d"],
+      "type": "Payment",
+      "reference": "check_number",
+      "layout": "multi_column_checks",
+      "check_row_regex": "(\\d{4})\\s+([\\d,]+\\.\\d{2})\\s+(\\d{2}/\\d{2})",
+      "columns": ["check_number","amount","date"],
+      "amount_sign": "positive",
+      "normalize": [[".*", "Check"]]
+    }
+  ],
+
+  "validation": {
+    "daily_balance_marker": "Daily ledger balance summary",
+    "daily_balance_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})"
+  }
+}

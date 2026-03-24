@@ -1,0 +1,59 @@
+{
+  "key_id": "pnb_business_regular_checking_v1",
+  "bank": "Pacific National Bank",
+  "product": "Business Regular Checking",
+  "sheet_name_template": "PNB {last4} - {year}",
+  "detect_by": ["Pacific National Bank", "PNB", "BUSINESS REGULAR CHECKING", "pnb.com"],
+
+  "header": {
+    "period_regex": "Statement Dates (\\d{2}/\\d{2}/\\d{2}) thru (\\d{2}/\\d{2}/\\d{2})",
+    "period_format": "MM/DD/YY",
+    "account_regex": "ACCT ENDING (\\d{4})",
+    "beginning_balance_regex": "PREVIOUS BALANCE\\s+([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "ENDING BALANCE\\s+([\\d,]+\\.\\d{2})"
+  },
+
+  "date_format": "MM/DD",
+  "year_from": "period",
+
+  "sections": [
+    {
+      "name": "DEPOSITS/CREDITS",
+      "start_marker": "DEPOSITS/CREDITS",
+      "end_markers": ["CHECKS AND WITHDRAWALS", "BALANCE BY DATE"],
+      "type": "Deposit",
+      "reference": "",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+([\\d,]+\\.\\d{2})(?!-)\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": []
+    },
+    {
+      "name": "CHECKS AND WITHDRAWALS",
+      "start_marker": "CHECKS AND WITHDRAWALS",
+      "end_markers": ["BALANCE BY DATE", "Page 2"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+([\\w][^\\n]+?)\\s+([\\d,]+\\.\\d{2})-",
+      "columns": ["date","description","amount"],
+      "amount_sign": "suffix_minus",
+      "multiline_description": true,
+      "multiline_stop_regex": "^\\d{2}/\\d{2}\\s",
+      "wire_transfer_rule": {
+        "trigger": "Wire Transfer Debit",
+        "beneficiary_line_offset": 1,
+        "description_template": "Wire to {next_line}"
+      },
+      "normalize": [
+        ["Wire Transfer Debit.*", "Wire Transfer"],
+        ["WIRE TRANSFER FEE", "Wire Transfer Fee"],
+        ["BILL PAY MONTHLY FEE", "Bill Pay Monthly Fee"]
+      ]
+    }
+  ],
+
+  "validation": {
+    "daily_balance_marker": "BALANCE BY DATE",
+    "daily_balance_regex": "(\\d{2}/\\d{2})\\s+([\\d,]+\\.\\d{2})"
+  }
+}

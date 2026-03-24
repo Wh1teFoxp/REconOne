@@ -1,0 +1,81 @@
+{
+  "key_id": "bofa_business_advantage_fundamentals_v1",
+  "bank": "Bank of America",
+  "product": "Business Advantage Fundamentals Banking",
+  "sheet_name_template": "BOA {last4} - {year}",
+  "detect_by": ["Bank of America", "Business Advantage Fundamentals", "bankofamerica.com"],
+
+  "header": {
+    "period_regex": "for (\\w+ \\d+, \\d{4}) to (\\w+ \\d+, \\d{4})",
+    "period_format": "Month DD, YYYY",
+    "account_regex": "Account number:\\s*([\\d ]+)",
+    "beginning_balance_regex": "Beginning balance on[^\\$]*\\$([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "Ending balance on[^\\$]*\\$([\\d,]+\\.\\d{2})"
+  },
+
+  "date_format": "MM/DD/YY",
+  "year_from": "date_field_2digit",
+
+  "sections": [
+    {
+      "name": "Deposits and other credits",
+      "start_marker": "Deposits and other credits",
+      "end_markers": ["Withdrawals and other debits", "Service fees", "Daily ledger", "Page \\d of"],
+      "type": "Deposit",
+      "reference": "",
+      "row_regex": "(\\d{2}/\\d{2}/\\d{2})\\s+(.+?)\\s+([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["Online Banking transfer from (BRK|CHK|SAV) (\\w+) Confirmation#.*", "Transfer from $1 $2"],
+        ["Online Banking transfer from (\\w+) Confirmation#.*", "Transfer from $1"],
+        ["Fee Refund", "Fee Refund"],
+        ["([\\w]+)\\s+DES:ACHS WIRES ID:[^\\n]*INDN:([\\w ]+) CO ID:.*", "$1 ACH"]
+      ]
+    },
+    {
+      "name": "Withdrawals and other debits",
+      "start_marker": "Withdrawals and other debits",
+      "end_markers": ["Service fees", "Daily ledger", "Page \\d of"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2}/\\d{2})\\s+(.+?)\\s+(-[\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "already_negative",
+      "normalize": [
+        ["([\\w ]+)\\s+DES:PAYMENT ID:[\\d]+ INDN:.*", "$1 Payment"],
+        ["Online Banking transfer to (BRK|CHK|SAV) (\\w+) Confirmation#.*", "Transfer to $1 $2"],
+        ["Online Banking transfer to (\\w+) Confirmation#.*", "Transfer to $1"],
+        ["Online transfer to (\\w+) Confirmation#.*", "Transfer to $1"],
+        ["([\\w.]+) PAYME DES:([\\w.]+) ID:.*", "$1 Payment"],
+        ["Zelle payment to ([\\w ]+) Conf#.*", "Zelle to $1"],
+        ["Online Banking payment to (\\w+) Confirmation#.*", "Payment to $1"],
+        ["([\\w ]+) DES:([\\w ]+) PYMT ID:.*", "$2"],
+        ["BKOFAMERICA ATM[^W]*WITHDRWL.*", "ATM Withdrawal"],
+        ["PMNT SENT[^C]*CASH APP\\*([\\w ]+) .*", "Cash App - $1"],
+        ["SBA LOAN DES:PAYMENT.*", "SBA Loan Payment"],
+        ["BMW BANK DES:BMWFS PYMT.*", "BMW Financial Payment"]
+      ]
+    },
+    {
+      "name": "Service fees",
+      "start_marker": "Service fees",
+      "end_markers": ["Daily ledger", "Page \\d of"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2}/\\d{2})\\s+(.+?)\\s+(-[\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "already_negative",
+      "normalize": [
+        ["Monthly Fee Business Adv Fundamentals", "Monthly Service Fee"],
+        ["OVERDRAFT ITEM FEE FOR ACTIVITY OF.*", "Overdraft Fee"],
+        ["ONLINE BUSINESS SUITE DIRECT PMT SERVICES", "Online Business Suite Fee"]
+      ]
+    }
+  ],
+
+  "validation": {
+    "daily_balance_marker": "Daily ledger balances",
+    "daily_balance_regex": "(\\d{2}/\\d{2})\\s+(-?[\\d,]+\\.\\d{2})"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "key_id": "truist_business_value_200_checking_v1",
+  "bank": "Truist",
+  "product": "Business Value 200 Checking",
+  "sheet_name_template": "Truist {last4} - {year}",
+  "detect_by": ["Truist", "BUSINESS VALUE 200 CHECKING", "truist.com", "4TRUIST"],
+
+  "header": {
+    "period_regex": "For (\\d{2}/\\d{2}/\\d{4})",
+    "period_format": "MM/DD/YYYY_end_only",
+    "account_regex": "(?:BUSINESS VALUE 200 CHECKING|FL )\\s*(\\d{13})",
+    "beginning_balance_regex": "Your previous balance as of[^\\$]*\\$([\\d,]+\\.\\d{2})",
+    "ending_balance_regex": "Your new balance as of[^\\$]*=\\s*\\$([\\d,]+\\.\\d{2})"
+  },
+
+  "date_format": "MM/DD",
+  "year_from": "period",
+
+  "sections": [
+    {
+      "name": "Checks",
+      "start_marker": "^Checks$",
+      "end_markers": ["Other withdrawals", "Deposits, credits", "Page \\d of"],
+      "type": "Payment",
+      "reference": "check_number",
+      "layout": "multi_column_checks",
+      "check_row_regex": "(\\d{2}/\\d{2})\\s+(\\*?\\d+)\\s+([\\d,]+\\.\\d{2})",
+      "columns": ["date","check_number","amount"],
+      "amount_sign": "positive",
+      "normalize": [[".*", "Check"]]
+    },
+    {
+      "name": "Other withdrawals, debits and service charges",
+      "start_marker": "Other withdrawals, debits and service charges",
+      "end_markers": ["Deposits, credits", "Page \\d of"],
+      "type": "Payment",
+      "reference": "Debit",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["DEBIT CARD PURCHASE(?:-PIN)?\\s+\\d{2}-\\d{2}-\\d{2}\\s+\\w+\\s+FL\\s+\\d+\\s+(.+)", "$1"],
+        ["DEBIT CARD PURCHASE(?:-PIN)?\\s+\\d{2}-\\d{2}-\\d{2}\\s+[\\w ]+\\s+\\d+\\s+(.+)", "$1"],
+        ["DEBIT CARD PURCHASE\\s+(.+?)\\s+\\d{2}-\\d{2}\\s+.*", "$1"],
+        ["DEBIT CARD RECURRING PYMT\\s+(.+?)\\s+\\d{2}-\\d{2}\\s+.*", "$1"],
+        ["ZELLE BUSINESS PAYMENT TO ([\\w ]+) PAYMENT ID.*", "Zelle to $1"],
+        ["MAINT PYMT ([\\w ]+) [\\w]+ (.+)", "Maint - $2"],
+        ["INTERNET PAYMENT (?:ONLINE PAY|WEB PMTS)\\s+(.+)", "$1"],
+        ["INT'L SERVICE ASSESSMENT FEE (.+)", "Intl Fee - $1"],
+        ["ELEC PYMT FPL DIRECT DEBIT PPDA (.+)", "FPL - $1"],
+        ["ACH CORP DEBIT ([\\w ]+) ([\\w ]+).*", "$1 $2"],
+        ["SERVICE CHARGES - PRIOR PERIOD", "Service Charge"]
+      ]
+    },
+    {
+      "name": "Deposits, credits and interest",
+      "start_marker": "Deposits, credits and interest",
+      "end_markers": ["Page \\d of", "Questions"],
+      "type": "Deposit",
+      "reference": "",
+      "row_regex": "(\\d{2}/\\d{2})\\s+(.+?)\\s+([\\d,]+\\.\\d{2})\\s*$",
+      "columns": ["date","description","amount"],
+      "amount_sign": "positive",
+      "normalize": [
+        ["MOBILE DEPOSIT", "Mobile Deposit"],
+        ["DEPOSIT", "Deposit"]
+      ]
+    }
+  ],
+
+  "validation": {
+    "daily_balance_marker": null,
+    "note": "Truist no tiene tabla de saldos diarios — validar solo contra ending balance"
+  }
+}
