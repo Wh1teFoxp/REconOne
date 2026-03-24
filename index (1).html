@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BankRecon — Statement Parser</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+:root{
+  --bg:#0c0c0e;--bg2:#141416;--bg3:#1a1a1d;--bg4:#212125;
+  --b:#252529;--b2:#33333a;--b3:#44444d;
+  --t:#e2e2e6;--t2:#9090a0;--t3:#55555f;--t4:#33333a;
+  --g:#4ade80;--g2:#166534;--g3:#0d3320;
+  --y:#fbbf24;--y2:#78350f;
+  --r:#f87171;--r2:#7f1d1d;
+  --bl:#60a5fa;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+  --r4:4px;--r6:6px;--r8:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t);font-family:var(--sans);font-size:14px;min-height:100vh;display:flex;flex-direction:column}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;gap:12px;padding:13px 24px;border-bottom:1px solid var(--b);flex-shrink:0}
+.logo{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--g);letter-spacing:.12em}
+.logo-sep{color:var(--t3)}
+.topbar-sub{font-size:12px;color:var(--t3)}
+.key-count{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--t3);border:1px solid var(--b2);padding:3px 8px;border-radius:3px}
+.key-count b{color:var(--g)}
+.credit{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.04em}
+.credit span{color:var(--t2)}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:260px 1fr;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{border-right:1px solid var(--b);padding:20px 16px;display:flex;flex-direction:column;gap:20px;overflow-y:auto}
+.slabel{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--t3);text-transform:uppercase;margin-bottom:8px}
+
+/* KEY LIST */
+.key-list{display:flex;flex-direction:column;gap:4px}
+.key-item{background:var(--bg3);border:1px solid var(--b);border-radius:var(--r4);padding:9px 10px;cursor:pointer;transition:border-color .1s,background .1s;position:relative;padding-right:20px}
+.key-item:hover{border-color:var(--b3)}
+.key-item.selected{border-color:var(--g2);background:var(--g3)}
+.ki-bank{font-size:12px;font-weight:500;color:var(--t);line-height:1.3}
+.ki-prod{font-size:10px;color:var(--t3);margin-top:2px;line-height:1.3}
+.ki-dot{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--g)}
+
+/* LOADED KEYS */
+.active-keys{display:flex;flex-direction:column;gap:3px}
+.ak-item{font-family:var(--mono);font-size:10px;color:var(--t3);padding:4px 8px;background:var(--bg4);border-radius:3px;display:flex;align-items:center;gap:6px}
+.ak-item .dot{width:5px;height:5px;border-radius:50%;background:var(--g);flex-shrink:0}
+.ak-item .pending-dot{background:var(--t3)}
+
+/* MAIN */
+.main{padding:24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+
+/* UPLOAD */
+.drop-zone{border:1.5px dashed var(--b2);border-radius:var(--r8);padding:32px 24px;text-align:center;cursor:pointer;transition:all .18s;position:relative}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--g2);background:var(--g3)}
+.drop-icon{font-size:28px;margin-bottom:10px;opacity:.35}
+.drop-text{font-size:13px;color:var(--t2)}
+.drop-sub{font-size:11px;color:var(--t3);margin-top:4px}
+.drop-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+
+/* STATUS */
+.status-box{background:var(--bg2);border:1px solid var(--b);border-radius:var(--r6);overflow:hidden;display:none}
+.status-box.show{display:block}
+.sb-head{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--b);font-family:var(--mono);font-size:11px;color:var(--t2)}
+.spin{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--t3);border-top-color:var(--g);animation:spin .7s linear infinite}
+.spin.done{border:none;background:var(--g);animation:none}
+.spin.err{border:none;background:var(--r);animation:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sb-log{padding:10px 14px;font-family:var(--mono);font-size:11px;line-height:1.9;color:var(--t2);max-height:160px;overflow-y:auto}
+.ok{color:var(--g)}.warn{color:var(--y)}.err{color:var(--r)}.info{color:var(--bl)}
+
+/* ALERTS */
+.alert-panel{border:1px solid var(--y);background:rgba(251,191,36,.05);border-radius:var(--r6);padding:14px 16px;display:none}
+.alert-panel.show{display:block}
+.ap-title{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--y);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ap-body{font-size:12px;color:var(--t2);line-height:1.7}
+.ap-section{background:rgba(251,191,36,.08);border-left:2px solid var(--y);padding:6px 10px;margin:8px 0;font-family:var(--mono);font-size:11px;color:var(--y)}
+.ap-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.btn-xs{font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:3px;border:1px solid var(--b2);background:var(--bg4);color:var(--t2);cursor:pointer;transition:all .1s}
+.btn-xs:hover{border-color:var(--g2);color:var(--g)}
+
+/* VALIDATION */
+.val-row{font-family:var(--mono);font-size:11px;padding:9px 13px;border-radius:var(--r4);display:none}
+.val-row.ok{display:flex;gap:8px;align-items:center;background:rgba(74,222,128,.07);border:1px solid var(--g2);color:var(--g)}
+.val-row.fail{display:flex;gap:8px;align-items:center;background:rgba(248,113,113,.07);border:1px solid #b91c1c;color:var(--r)}
+
+/* PREVIEW */
+.preview-box{background:var(--bg2);border:1px solid var(--b);border-radius:var(--r6);overflow:hidden;display:none}
+.preview-box.show{display:block}
+.pb-head{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--b)}
+.pb-title{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.pb-stats{font-family:var(--mono);font-size:10px;display:flex;gap:14px;color:var(--t3)}
+.stat-d{color:var(--g)}.stat-p{color:var(--r)}
+.tbl-wrap{overflow-x:auto;max-height:360px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+th{background:var(--bg4);color:var(--t3);font-weight:500;padding:6px 10px;text-align:left;border-bottom:1px solid var(--b);white-space:nowrap;font-size:10px;letter-spacing:.04em;position:sticky;top:0}
+td{padding:5px 10px;border-bottom:1px solid var(--b4);color:var(--t2);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.c-dep{color:var(--g)}.c-pay{color:var(--r)}.c-bal{color:var(--t);font-weight:500}.c-bold{color:var(--t);font-weight:600}
+tr.beg-row td{color:var(--bl)}
+tr.beg-row .c-bold{color:var(--bl)}
+
+/* GENERATE */
+.gen-area{display:flex;align-items:center;gap:14px}
+.btn-gen{font-family:var(--mono);font-size:12px;font-weight:600;padding:10px 22px;background:var(--g);color:#061a0c;border:none;border-radius:var(--r4);cursor:pointer;letter-spacing:.04em;transition:background .15s;display:none}
+.btn-gen.show{display:block}
+.btn-gen:hover{background:#22c55e}
+.btn-gen:disabled{opacity:.4;cursor:not-allowed}
+.gen-hint{font-size:11px;color:var(--t3);font-family:var(--mono)}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="logo">BankRecon</span>
+  <span class="logo-sep">/</span>
+  <span class="topbar-sub">Autonomous Statement Parser</span>
+  <div class="credit">developed by <span>Carlos Padrino</span></div>
+  <div class="key-count">Keys: <b id="keyCount">0</b></div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div>
+      <div class="slabel">Bank Key</div>
+      <div class="key-list" id="keyList">
+        <div style="font-size:11px;color:var(--t3);padding:4px">Loading...</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="slabel">Active Keys</div>
+      <div class="active-keys" id="activeKeys">
+        <div style="font-size:11px;color:var(--t3)">No keys loaded</div>
+      </div>
+      <div style="margin-top:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="file" id="extraKeyInput" accept=".json" style="display:none">
+          <button class="btn-xs" onclick="document.getElementById('extraKeyInput').click()">+ Load complement key (.json)</button>
+        </label>
+      </div>
+    </div>
+
+    <div style="margin-top:auto;padding-top:12px;border-top:1px solid var(--b)">
+      <div style="font-size:10px;color:var(--t3);line-height:1.7">
+        <span style="color:var(--t2)">Output columns:</span><br>
+        Date · Reference · Description<br>
+        Amount · Total Amount · Type<br>
+        GL# · GL Name · Saldo<br><br>
+        <span style="color:var(--t2)">Sheet name:</span><br>
+        <span style="font-family:var(--mono);color:var(--g)">[BANK] [LAST4] - [YEAR]</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-input" id="fileInput" accept=".pdf">
+      <div class="drop-icon">📄</div>
+      <div class="drop-text">Drop PDF bank statement here or click to browse</div>
+      <div class="drop-sub" id="dropSub">Select a Bank Key from the sidebar first</div>
+    </div>
+
+    <div class="status-box" id="statusBox">
+      <div class="sb-head">
+        <div class="spin" id="spinEl"></div>
+        <span id="statusTitle">Processing...</span>
+      </div>
+      <div class="sb-log" id="logEl"></div>
+    </div>
+
+    <div class="alert-panel" id="alertPanel">
+      <div class="ap-title">⚠ UNMAPPED SECTIONS DETECTED</div>
+      <div class="ap-body" id="alertBody"></div>
+      <div class="ap-actions">
+        <button class="btn-xs" onclick="copyKeyRequestPrompt()">📋 Copy prompt to request complement key</button>
+        <button class="btn-xs" onclick="document.getElementById('alertPanel').classList.remove('show')">Dismiss</button>
+      </div>
+    </div>
+
+    <div class="val-row" id="valRow"></div>
+
+    <div class="preview-box" id="previewBox">
+      <div class="pb-head">
+        <div class="pb-title" id="pbTitle">Preview</div>
+        <div class="pb-stats" id="pbStats"></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>DATE</th><th>REFERENCE</th><th>DESCRIPTION</th>
+            <th>AMOUNT</th><th>TOTAL AMT</th><th>TYPE</th>
+            <th>GL#</th><th>GL NAME</th><th>SALDO</th>
+          </tr></thead>
+          <tbody id="tbodyEl"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="gen-area">
+      <button class="btn-gen" id="btnGen" onclick="generateExcel()">↓ DOWNLOAD .XLSX</button>
+      <div class="gen-hint" id="genHint"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// GLOBALS
+// ═══════════════════════════════════════════════════════════════════════
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const KEYS_BASE = './keys/';
+let G = {
+  allKeysMeta: [],
+  selectedKeyMeta: null,
+  loadedKeys: [],       // array of key JSON objects (base + complements)
+  pdfText: '',
+  fileName: '',
+  rows: [],             // final processed rows
+  sheetName: '',
+  unmappedSections: [], // sections found in PDF not covered by any loaded key
+  pdfTextForPrompt: ''
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════
+async function init() {
+  try {
+    const r = await fetch(KEYS_BASE + 'index.json');
+    const idx = await r.json();
+    G.allKeysMeta = idx.keys.filter(k => k.status === 'active');
+    document.getElementById('keyCount').textContent = G.allKeysMeta.length;
+    renderKeyList();
+  } catch(e) {
+    document.getElementById('keyList').innerHTML =
+      '<div style="font-size:11px;color:var(--r);padding:4px">Error loading keys/index.json</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// KEY UI
+// ═══════════════════════════════════════════════════════════════════════
+function renderKeyList() {
+  const list = document.getElementById('keyList');
+  list.innerHTML = '';
+  G.allKeysMeta.forEach(km => {
+    const d = document.createElement('div');
+    d.className = 'key-item';
+    d.dataset.kid = km.key_id;
+    d.innerHTML = `<div class="ki-dot"></div>
+      <div class="ki-bank">${km.bank}</div>
+      <div class="ki-prod">${km.product}</div>`;
+    d.addEventListener('click', () => selectKey(km));
+    list.appendChild(d);
+  });
+}
+
+async function selectKey(km) {
+  document.querySelectorAll('.key-item').forEach(el => el.classList.remove('selected'));
+  document.querySelector(`[data-kid="${km.key_id}"]`)?.classList.add('selected');
+  G.selectedKeyMeta = km;
+
+  // Load the key file
+  try {
+    const r = await fetch(KEYS_BASE + km.file);
+    const keyData = await r.json();
+    G.loadedKeys = [keyData];
+    renderActiveKeys();
+    document.getElementById('dropSub').textContent =
+      `Key: ${km.bank} — ${km.product}`;
+    log(`Key loaded: <span class="ok">${km.bank} / ${km.product}</span>`);
+  } catch(e) {
+    log(`<span class="err">Error loading key file: ${e.message}</span>`);
+  }
+}
+
+function renderActiveKeys() {
+  const el = document.getElementById('activeKeys');
+  if (!G.loadedKeys.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--t3)">No keys loaded</div>';
+    return;
+  }
+  el.innerHTML = G.loadedKeys.map(k =>
+    `<div class="ak-item"><div class="dot"></div>${k.key_id}</div>`
+  ).join('');
+}
+
+// Load complement key from local file
+document.getElementById('extraKeyInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const keyData = JSON.parse(text);
+    G.loadedKeys.push(keyData);
+    renderActiveKeys();
+    log(`<span class="ok">✓ Complement key loaded:</span> ${keyData.key_id}`);
+    // Re-run parsing if we already have PDF text
+    if (G.pdfText) {
+      log('<span class="info">→ Re-running parser with new key...</span>');
+      runParser();
+    }
+  } catch(ex) {
+    log(`<span class="err">Invalid key JSON: ${ex.message}</span>`);
+  }
+  e.target.value = '';
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// FILE UPLOAD
+// ═══════════════════════════════════════════════════════════════════════
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f?.type === 'application/pdf') handleFile(f);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+async function handleFile(file) {
+  if (!G.selectedKeyMeta) { alert('Please select a Bank Key first.'); return; }
+  G.fileName = file.name;
+  showStatus();
+  log(`Reading PDF: <span class="info">${file.name}</span>`);
+  try {
+    G.pdfText = await extractPdf(file);
+    log(`<span class="ok">✓</span> Extracted ${G.pdfText.length.toLocaleString()} chars from PDF`);
+    runParser();
+  } catch(ex) {
+    setDone('err', 'PDF read error');
+    log(`<span class="err">✗ ${ex.message}</span>`);
+  }
+}
+
+async function extractPdf(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let out = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // Reconstruct lines using y-position grouping
+    const items = content.items;
+    const lineMap = {};
+    items.forEach(item => {
+      const y = Math.round(item.transform[5]);
+      if (!lineMap[y]) lineMap[y] = [];
+      lineMap[y].push({ x: item.transform[4], str: item.str });
+    });
+    const ys = Object.keys(lineMap).map(Number).sort((a,b) => b - a);
+    ys.forEach(y => {
+      const line = lineMap[y].sort((a,b) => a.x - b.x).map(i => i.str).join(' ');
+      out += line.trim() + '\n';
+    });
+    out += '\n--- PAGE BREAK ---\n';
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAIN PARSER
+// ═══════════════════════════════════════════════════════════════════════
+function runParser() {
+  try {
+    log('→ Parsing header info...');
+    const header = parseHeader();
+    log(`<span class="ok">✓</span> Period: ${header.periodStart} → ${header.periodEnd} | Account: ...${header.last4} | Beg: ${fmt(header.begBal)} | End: ${fmt(header.endBal)}`);
+
+    log('→ Scanning sections...');
+    const { rows, unmapped } = parseSections(header);
+    G.unmappedSections = unmapped;
+
+    if (unmapped.length > 0) {
+      showAlerts(unmapped);
+      log(`<span class="warn">⚠ ${unmapped.length} unmapped section(s) found — check alerts</span>`);
+    }
+
+    log(`<span class="ok">✓</span> ${rows.length} transaction rows parsed`);
+
+    // Build running balance
+    let bal = header.begBal;
+    const fullRows = [];
+
+    // Beginning balance row
+    fullRows.push({
+      date: header.periodStart,
+      reference: '',
+      description: 'Beginning Balance',
+      amount: null,
+      total_amount: null,
+      type: '',
+      balance: bal,
+      isBeg: true
+    });
+
+    // Sort rows by date
+    rows.sort((a, b) => dateToMs(a.rawDate, header) - dateToMs(b.rawDate, header));
+
+    rows.forEach(r => {
+      bal = Math.round((bal + r.amount) * 100) / 100;
+      fullRows.push({
+        date: formatDate(r.rawDate, header),
+        reference: r.reference,
+        description: r.description,
+        amount: r.amount,
+        total_amount: Math.abs(r.amount),
+        type: r.type,
+        balance: bal,
+        isBeg: false
+      });
+    });
+
+    G.rows = fullRows;
+    G.sheetName = buildSheetName(header);
+
+    // Validate
+    const diff = Math.abs(bal - header.endBal);
+    const valEl = document.getElementById('valRow');
+    if (diff < 0.02) {
+      valEl.className = 'val-row ok';
+      valEl.innerHTML = `✓ Balance validation PASSED — Calculated: ${fmt(bal)} = Statement: ${fmt(header.endBal)}`;
+    } else {
+      valEl.className = 'val-row fail';
+      valEl.innerHTML = `⚠ Balance mismatch — Calculated: ${fmt(bal)} vs Statement: ${fmt(header.endBal)} — Diff: ${fmt(diff)}`;
+      log(`<span class="warn">⚠ Balance diff: ${fmt(diff)} — some transactions may be missing or parsing errors</span>`);
+    }
+    valEl.style.display = 'flex';
+
+    renderPreview(fullRows, header);
+    document.getElementById('btnGen').classList.add('show');
+    document.getElementById('genHint').textContent = `→ ${G.sheetName}.xlsx`;
+    setDone('done', `Done — ${fullRows.length} rows`);
+    log(`<span class="ok">✓</span> Ready to download: <span class="info">${G.sheetName}.xlsx</span>`);
+
+  } catch(ex) {
+    setDone('err', 'Parse error');
+    log(`<span class="err">✗ ${ex.message}</span>`);
+    console.error(ex);
+  }
+}
+
+// ─── HEADER PARSER ─────────────────────────────────────────────────────
+function parseHeader() {
+  const key = mergedKey();
+  const text = G.pdfText;
+
+  // Period
+  const pr = new RegExp(key.header.period_regex, 'i');
+  const pm = text.match(pr);
+  if (!pm) throw new Error(`Cannot find period using regex: ${key.header.period_regex}`);
+
+  let periodStart, periodEnd, year;
+  const fmt_type = key.header.period_format || 'MM/DD/YYYY';
+
+  if (fmt_type === 'Month DD, YYYY' || fmt_type === 'Month YYYY') {
+    periodStart = parseMonthDate(pm[1]);
+    periodEnd = pm[2] ? parseMonthDate(pm[2]) : periodStart;
+    year = periodEnd.split('/')[2];
+  } else if (fmt_type === 'MM/DD/YYYY_end_only') {
+    periodEnd = pm[1];
+    const parts = pm[1].split('/');
+    periodStart = `${parts[0]}/01/${parts[2]}`;
+    year = parts[2];
+  } else if (fmt_type === 'MM/DD/YY') {
+    const s = pm[1].split('/'); const e = pm[2].split('/');
+    periodStart = `${s[0]}/${s[1]}/20${s[2]}`;
+    periodEnd = `${e[0]}/${e[1]}/20${e[2]}`;
+    year = `20${e[2]}`;
+  } else {
+    periodStart = pm[1]; periodEnd = pm[2] || pm[1];
+    year = periodEnd.split('/')[2] || periodEnd.split('/')[2];
+  }
+
+  // Account
+  const ar = new RegExp(key.header.account_regex, 'i');
+  const am = text.match(ar);
+  const rawAcct = am ? am[1].replace(/\s/g,'') : '0000';
+  const last4 = rawAcct.slice(-4);
+
+  // Balances
+  const begR = new RegExp(key.header.beginning_balance_regex, 'i');
+  const endR = new RegExp(key.header.ending_balance_regex, 'i');
+  const begM = text.match(begR);
+  const endM = text.match(endR);
+  if (!begM) throw new Error('Cannot find beginning balance');
+  if (!endM) throw new Error('Cannot find ending balance');
+
+  return {
+    periodStart, periodEnd, year, last4,
+    begBal: parseAmount(begM[1]),
+    endBal: parseAmount(endM[1]),
+    key
+  };
+}
+
+function parseMonthDate(str) {
+  const months = {january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',
+    july:'07',august:'08',september:'09',october:'10',november:'11',december:'12'};
+  str = str.trim();
+  // "November 2025" -> first day
+  const m1 = str.match(/^(\w+)\s+(\d{4})$/i);
+  if (m1) { const mo = months[m1[1].toLowerCase()]; return `${mo}/01/${m1[2]}`; }
+  // "July 01, 2025"
+  const m2 = str.match(/^(\w+)\s+(\d{1,2}),?\s+(\d{4})$/i);
+  if (m2) { const mo = months[m2[1].toLowerCase()]; return `${mo}/${m2[2].padStart(2,'0')}/${m2[3]}`; }
+  return str;
+}
+
+// ─── SECTIONS PARSER ───────────────────────────────────────────────────
+function parseSections(header) {
+  const key = header.key;
+  const text = G.pdfText;
+  const rows = [];
+  const unmapped = [];
+
+  // Find all section headers present in the PDF that we don't have a key for
+  const knownSectionNames = key.sections.map(s => s.name);
+
+  // Get text body after "known" header area
+  // For each section defined in the key, try to extract
+  key.sections.forEach(sec => {
+    log(`&nbsp;&nbsp;→ Section: <span class="info">${sec.name}</span>`);
+    const secRows = parseSection(sec, text, header);
+    log(`&nbsp;&nbsp;&nbsp;&nbsp;<span class="ok">✓</span> ${secRows.length} rows`);
+    rows.push(...secRows);
+  });
+
+  // Detect unmapped sections: look for capitalized section headers in the PDF
+  // that aren't covered by any loaded key section
+  const allSectionHeaders = gatherAllSections(text);
+  allSectionHeaders.forEach(found => {
+    const covered = key.sections.some(sec => {
+      const marker = sec.start_marker.replace('^','').replace('$','');
+      return new RegExp(marker, 'i').test(found);
+    });
+    if (!covered) {
+      unmapped.push(found);
+    }
+  });
+
+  return { rows, unmapped };
+}
+
+function gatherAllSections(text) {
+  // Heuristic: lines that are ALL CAPS or Title Case with 3+ words, or known section-like patterns
+  const candidates = new Set();
+  const lines = text.split('\n');
+  const sectionPatterns = [
+    /^[A-Z][A-Z\s&\/,]{8,}$/,          // ALL CAPS lines
+    /^(Checks?|Deposits?|Withdrawals?|Credits?|Fees?|Electronic|Service|ATM|Debit|Other)\b.{3,}$/i
+  ];
+  lines.forEach(line => {
+    const l = line.trim();
+    if (!l || l.length < 4 || l.length > 80) return;
+    // Skip lines that look like data (start with date, number, or are very short)
+    if (/^\d{2}\/\d{2}/.test(l)) return;
+    if (/^\$[\d,]/.test(l)) return;
+    if (sectionPatterns.some(p => p.test(l))) {
+      candidates.add(l);
+    }
+  });
+  return [...candidates];
+}
+
+function parseSection(sec, text, header) {
+  const startR = new RegExp(sec.start_marker, 'im');
+  const startM = text.match(startR);
+  if (!startM) return [];
+
+  let chunk = text.slice(startM.index + startM[0].length);
+
+  // Cut at end marker
+  for (const em of (sec.end_markers || [])) {
+    const er = new RegExp(em, 'im');
+    const em2 = chunk.match(er);
+    if (em2) chunk = chunk.slice(0, em2.index);
+  }
+
+  const rows = [];
+
+  if (sec.layout === 'multi_column_checks') {
+    // Special handler for check tables
+    return parseCheckTable(sec, chunk, header);
+  }
+
+  // Standard row parsing
+  const rowR = new RegExp(sec.row_regex, 'gim');
+  let m;
+  while ((m = rowR.exec(chunk)) !== null) {
+    const row = buildRow(m, sec, header);
+    if (row) rows.push(row);
+  }
+
+  return rows;
+}
+
+function buildRow(m, sec, header) {
+  const cols = sec.columns;
+  const dateIdx = cols.indexOf('date');
+  const amtIdx = cols.indexOf('amount');
+  const descIdx = cols.indexOf('description');
+  const checkIdx = cols.indexOf('check_number');
+  const typeIdx = cols.indexOf('tx_type');
+
+  let rawDate = dateIdx >= 0 ? m[dateIdx + 1] : null;
+  let rawAmt  = amtIdx  >= 0 ? m[amtIdx  + 1] : null;
+  let rawDesc = descIdx >= 0 ? m[descIdx + 1] : '';
+  let checkNum = checkIdx >= 0 ? m[checkIdx + 1] : null;
+  let txType  = typeIdx  >= 0 ? m[typeIdx + 1]?.trim() || '' : null;
+
+  if (!rawDate || !rawAmt) return null;
+
+  // Compute amount
+  let amount = parseAmountWithSign(rawAmt, sec);
+
+  // Description
+  let desc = rawDesc.trim().replace(/\s+/g,' ');
+  desc = applyNormalize(desc, sec.normalize || []);
+
+  // Reference
+  let ref = '';
+  if (sec.reference === 'check_number') ref = (checkNum||'').replace('*','').trim();
+  else if (sec.reference === 'Debit') ref = 'Debit';
+  else if (sec.reference === 'auto' && txType !== null) {
+    // Mercury: use type_rules and reference_rules
+    const refRules = sec.reference_rules || {};
+    ref = refRules[txType] !== undefined ? refRules[txType] : 'Debit';
+  }
+
+  // Type for mixed sections
+  let type = sec.type;
+  if (type === 'mixed' && txType !== null) {
+    const typeRules = sec.type_rules || {};
+    type = typeRules[txType] !== undefined ? typeRules[txType] : (amount > 0 ? 'Deposit' : 'Payment');
+  }
+  // Fallback from amount sign
+  if (!type || type === 'mixed') type = amount > 0 ? 'Deposit' : 'Payment';
+
+  // Ensure correct sign
+  if (type === 'Payment' && amount > 0) amount = -amount;
+  if (type === 'Deposit' && amount < 0) amount = Math.abs(amount);
+
+  return { rawDate, amount, description: desc, reference: ref, type };
+}
+
+function parseCheckTable(sec, chunk, header) {
+  // Multi-column check table: scan for check rows
+  const r = new RegExp(sec.check_row_regex, 'gim');
+  const rows = [];
+  let m;
+  while ((m = r.exec(chunk)) !== null) {
+    const cols = sec.columns;
+    const dateIdx = cols.indexOf('date');
+    const checkIdx = cols.indexOf('check_number');
+    const amtIdx = cols.indexOf('amount');
+    const rawDate  = m[dateIdx + 1];
+    const checkNum = m[checkIdx + 1]?.replace('*','').trim();
+    const rawAmt   = m[amtIdx  + 1];
+    if (!rawDate || !rawAmt) continue;
+    const amount = -parseAmount(rawAmt);
+    rows.push({
+      rawDate, amount,
+      description: 'Check',
+      reference: checkNum,
+      type: 'Payment'
+    });
+  }
+  return rows;
+}
+
+// ─── AMOUNT PARSING ────────────────────────────────────────────────────
+function parseAmountWithSign(raw, sec) {
+  const sign = sec.amount_sign;
+  if (sign === 'already_negative') {
+    return parseAmount(raw); // sign is already in the string
+  }
+  if (sign === 'suffix_minus') {
+    // "150.00-" → -150
+    const n = parseAmount(raw.replace(/-$/, ''));
+    return raw.trim().endsWith('-') ? -n : n;
+  }
+  if (sign === 'from_prefix') {
+    // Mercury: "–$1,640.00" or "+$1,890.42"
+    const neg = raw.includes('–') || raw.startsWith('-');
+    const n = parseAmount(raw.replace(/[–+$]/g,''));
+    return neg ? -n : n;
+  }
+  if (sign === 'positive') {
+    return parseAmount(raw); // always positive — sign determined by section type
+  }
+  return parseAmount(raw);
+}
+
+function parseAmount(str) {
+  if (!str) return 0;
+  const s = String(str).replace(/[$,\s]/g,'').replace('–','-');
+  return parseFloat(s) || 0;
+}
+
+// ─── NORMALIZE ─────────────────────────────────────────────────────────
+function applyNormalize(desc, rules) {
+  for (const [pattern, replacement] of rules) {
+    try {
+      const r = new RegExp(pattern, 'i');
+      if (r.test(desc)) {
+        return desc.replace(r, replacement).trim();
+      }
+    } catch(e) {}
+  }
+  return desc;
+}
+
+// ─── DATE HELPERS ──────────────────────────────────────────────────────
+function formatDate(raw, header) {
+  if (!raw) return '';
+  raw = raw.trim();
+  // Already full date
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) return raw;
+  // MM/DD/YY
+  if (/^\d{2}\/\d{2}\/\d{2}$/.test(raw)) {
+    const [mm, dd, yy] = raw.split('/');
+    return `${parseInt(mm)}/${parseInt(dd)}/20${yy}`;
+  }
+  // MM/DD → add year from period
+  if (/^\d{2}\/\d{2}$/.test(raw)) {
+    const [mm, dd] = raw.split('/');
+    return `${parseInt(mm)}/${parseInt(dd)}/${header.year}`;
+  }
+  // "Nov 04" or "Nov 4"
+  const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+    jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  const m = raw.match(/^(\w{3})\s+(\d{1,2})$/i);
+  if (m) {
+    const mo = months[m[1].toLowerCase()];
+    return mo ? `${parseInt(mo)}/${parseInt(m[2])}/${header.year}` : raw;
+  }
+  return raw;
+}
+
+function dateToMs(raw, header) {
+  const formatted = formatDate(raw, header);
+  const parts = formatted.split('/');
+  if (parts.length < 3) return 0;
+  return new Date(`${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`).getTime();
+}
+
+function buildSheetName(header) {
+  const key = header.key;
+  const tmpl = key.sheet_name_template || '{bank} {last4} - {year}';
+  const bankShort = (key.bank || 'BANK').split(' ').map(w=>w[0]).join('').toUpperCase();
+  return tmpl
+    .replace('{last4}', header.last4)
+    .replace('{year}', header.year)
+    .replace(/\{bank\}/i, bankShort);
+}
+
+// ─── MERGED KEY (base + complements combined) ──────────────────────────
+function mergedKey() {
+  if (!G.loadedKeys.length) throw new Error('No key loaded');
+  if (G.loadedKeys.length === 1) return G.loadedKeys[0];
+  // Merge sections from all loaded keys
+  const base = JSON.parse(JSON.stringify(G.loadedKeys[0]));
+  for (let i = 1; i < G.loadedKeys.length; i++) {
+    const ext = G.loadedKeys[i];
+    if (ext.sections) base.sections.push(...ext.sections);
+  }
+  return base;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════════════
+function showAlerts(unmapped) {
+  const panel = document.getElementById('alertPanel');
+  const body = document.getElementById('alertBody');
+  const sectionList = unmapped.map(s =>
+    `<div class="ap-section">Section detected: "${s}"</div>`
+  ).join('');
+  body.innerHTML = `
+    The following sections were found in the PDF but are not covered by the currently loaded key(s).<br>
+    Transactions in these sections were <strong>NOT processed</strong>.<br>
+    ${sectionList}
+    <br>To fix this: load a complement key that covers these sections, or create one by uploading this PDF to Claude.
+  `;
+  panel.classList.add('show');
+  G.pdfTextForPrompt = G.pdfText.substring(0, 3000);
+}
+
+function copyKeyRequestPrompt() {
+  const prompt = `I need a complement bank key JSON for my bank reconciliation tool.
+
+Bank: ${G.selectedKeyMeta?.bank}
+Base key: ${G.selectedKeyMeta?.key_id}
+File: ${G.fileName}
+
+Unmapped sections found in the PDF:
+${G.unmappedSections.map(s => '- ' + s).join('\n')}
+
+Please analyze the attached PDF bank statement and generate a complement key JSON that:
+1. Has "key_id": "${G.selectedKeyMeta?.key_id?.replace('_v1','')}_complement_v1"
+2. Has "extends": "${G.selectedKeyMeta?.key_id}"
+3. Contains ONLY the sections listed above (not the ones already in the base key)
+4. Follows the same key format with: start_marker, end_markers, row_regex, columns, amount_sign, normalize rules
+
+The key format reference is in the existing keys files.`;
+  navigator.clipboard.writeText(prompt).then(() => {
+    log('<span class="ok">✓</span> Prompt copied to clipboard — paste in Claude + attach the PDF');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PREVIEW
+// ═══════════════════════════════════════════════════════════════════════
+function renderPreview(rows, header) {
+  const box = document.getElementById('previewBox');
+  const tbody = document.getElementById('tbodyEl');
+  box.classList.add('show');
+  document.getElementById('pbTitle').textContent =
+    `Preview — ${G.sheetName} — ${rows.length} rows`;
+  const deps = rows.filter(r => r.type === 'Deposit').length;
+  const pays = rows.filter(r => r.type === 'Payment').length;
+  document.getElementById('pbStats').innerHTML =
+    `<span class="stat-d">↑ ${deps} deposits</span><span class="stat-p">↓ ${pays} payments</span>`;
+  tbody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    if (r.isBeg) tr.className = 'beg-row';
+    tr.innerHTML = `
+      <td class="${r.isBeg?'c-bold':''}">${r.date}</td>
+      <td>${r.reference}</td>
+      <td class="${r.isBeg?'c-bold':''}">${r.description}</td>
+      <td class="${r.amount>0?'c-dep':r.amount<0?'c-pay':''}">${r.amount!=null?fmt(r.amount):''}</td>
+      <td>${r.total_amount!=null?fmt(r.total_amount):''}</td>
+      <td>${r.type}</td>
+      <td></td><td></td>
+      <td class="c-bal">${r.balance!=null?fmt(r.balance):''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXCEL EXPORT
+// ═══════════════════════════════════════════════════════════════════════
+function generateExcel() {
+  const wb = XLSX.utils.book_new();
+  const data = [['Date','Reference','Description','Amount','Total Amount','Type','GL Number','GL Account name','Saldo']];
+  G.rows.forEach(r => {
+    data.push([
+      r.date, r.reference, r.description,
+      r.isBeg ? '' : (r.amount ?? ''),
+      r.isBeg ? '' : (r.total_amount ?? ''),
+      r.type, '', '', r.balance ?? ''
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:12},{wch:12},{wch:42},{wch:15},{wch:15},{wch:10},{wch:10},{wch:20},{wch:15}];
+  // Header row style
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = ws[XLSX.utils.encode_cell({r:0,c})];
+    if (cell) cell.s = {font:{bold:true,name:'Arial',sz:10},fill:{fgColor:{rgb:'D3D3D3'}},alignment:{horizontal:'center'}};
+  }
+  // Beginning balance bold
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = ws[XLSX.utils.encode_cell({r:1,c})];
+    if (cell) cell.s = {font:{bold:true,name:'Arial',sz:10}};
+  }
+  const safe = G.sheetName.substring(0,31);
+  XLSX.utils.book_append_sheet(wb, ws, safe);
+  XLSX.writeFile(wb, safe + '.xlsx');
+  log(`<span class="ok">✓</span> Downloaded: ${safe}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// STATUS LOG
+// ═══════════════════════════════════════════════════════════════════════
+function showStatus() {
+  document.getElementById('statusBox').classList.add('show');
+  document.getElementById('spinEl').className = 'spin';
+  document.getElementById('statusTitle').textContent = 'Processing...';
+  document.getElementById('logEl').innerHTML = '';
+  document.getElementById('alertPanel').classList.remove('show');
+  document.getElementById('previewBox').classList.remove('show');
+  document.getElementById('btnGen').classList.remove('show');
+  document.getElementById('valRow').style.display='none';
+  G.unmappedSections = [];
+}
+function setDone(state, msg) {
+  document.getElementById('spinEl').className = 'spin '+state;
+  document.getElementById('statusTitle').textContent = msg;
+}
+function log(html) {
+  const el = document.getElementById('logEl');
+  el.innerHTML += `<div>&gt; ${html}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+function fmt(n) {
+  if (n == null || n === '') return '';
+  return new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
